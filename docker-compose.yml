@@ -1,0 +1,1580 @@
+# =============================================================================
+# Self-Hosted Media & Infrastructure Stack
+# 46 Docker services | Single bridge network | OAuth2-protected
+# =============================================================================
+# Usage:
+#   cp .env.example .env    # Fill in your credentials
+#   docker compose up -d    # Start all services
+#
+# IMPORTANT: Always specify a service name for stop/restart/down commands.
+# Blanket commands affect ALL containers.
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Landing Pages
+  # ---------------------------------------------------------------------------
+
+  landing-page:
+    image: nginx:alpine
+    container_name: landing-page
+    ports:
+      - "8080:80"
+    volumes:
+      - /path/to/landing-page:/usr/share/nginx/html:ro
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  landing-page-secondary:
+    image: nginx:alpine
+    container_name: landing-page-secondary
+    ports:
+      - "8081:80"
+    volumes:
+      - /path/to/landing-page-secondary:/usr/share/nginx/html:ro
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Container Management
+  # ---------------------------------------------------------------------------
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    ports:
+      - "9001:8000"
+      - "9444:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    restart: on-failure
+    networks:
+      - plex_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ---------------------------------------------------------------------------
+  # Core Media Services
+  # ---------------------------------------------------------------------------
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM_TOKEN}
+    volumes:
+      - plex_config:/config
+      - ${MEDIA_PATH}:/data/local
+    devices:
+      - /dev/dri:/dev/dri
+    ports:
+      - "32400:32400"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 8G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:32400/identity || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - prowlarr_config:/config
+    ports:
+      - "9696:9696"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9696/ping || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - sonarr_config:/config
+      - ${MEDIA_PATH}/tv:/tv
+      - ${MEDIA_PATH}/downloads:/downloads
+      - ${MEDIA_PATH}/downloads/completed:/downloads/completed
+      - ${MEDIA_PATH}/downloads/tv:/downloads/tv
+      - ${MEDIA_PATH}/downloads/tv-sonarr:/downloads/tv-sonarr
+    ports:
+      - "8989:8989"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+      nzbget:
+        condition: service_healthy
+      qbittorrent-vpn:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8989/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - radarr_config:/config
+      - ${MEDIA_PATH}/movies:/movies
+      - ${MEDIA_PATH}/movies-4k:/movies-4k
+      - ${MEDIA_PATH}/downloads:/downloads
+      - ${MEDIA_PATH}/downloads/completed:/downloads/completed
+      - ${MEDIA_PATH}/downloads/movies:/downloads/movies
+    ports:
+      - "7878:7878"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+      nzbget:
+        condition: service_healthy
+      qbittorrent-vpn:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7878/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  nzbget:
+    image: lscr.io/linuxserver/nzbget:latest
+    container_name: nzbget
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - NZBGET_USER=${NZBGET_USERNAME}
+      - NZBGET_PASS=${NZBGET_PASSWORD}
+    volumes:
+      - nzbget_config:/config
+      - ${MEDIA_PATH}/downloads:/downloads
+    ports:
+      - "6789:6789"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6789 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  pulsarr:
+    image: lakker/pulsarr:latest
+    container_name: pulsarr
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./.config/pulsarr:/app/data
+    environment:
+      - TZ=${TZ:-America/Toronto}
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - bazarr_config:/config
+      - ${MEDIA_PATH}/movies:/movies
+      - ${MEDIA_PATH}/tv:/tv
+      - ${MEDIA_PATH}/downloads:/downloads
+    ports:
+      - "6767:6767"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6767 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # System Monitoring
+  # ---------------------------------------------------------------------------
+
+  glances:
+    image: nicolargo/glances:latest
+    container_name: glances
+    restart: on-failure
+    pid: host
+    cap_add:
+      - SYS_PTRACE
+    ports:
+      - "8383:61208"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/os-release:/etc/os-release:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - glances_config:/glances/conf
+    networks:
+      - plex_network
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - GLANCES_OPT=-w
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:61208/api/4/status || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # ---------------------------------------------------------------------------
+  # Video Transcoding
+  # ---------------------------------------------------------------------------
+
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:2.20.01
+    container_name: tdarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - internalNode=true
+      - nodeName=InternalNode
+    volumes:
+      - /srv/tdarr/config:/app/configs
+      - /srv/tdarr/config/server:/app/server
+      - /srv/tdarr/scripts:/app/scripts
+      - ${MEDIA_PATH}/movies-4k:/data/movies
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8265 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # Container Auto-Update
+  # ---------------------------------------------------------------------------
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    environment:
+      - TZ=${TZ:-America/Toronto}
+      - WATCHTOWER_CLEANUP=false
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_SCHEDULE=0 0 4 * * *  # Run daily at 4 AM
+      - WATCHTOWER_NOTIFICATIONS_LEVEL=warn
+      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_DISCORD_URL}
+      - WATCHTOWER_NOTIFICATION_TEMPLATE={{range .}}{{.Message}}{{println}}{{end}}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # ---------------------------------------------------------------------------
+  # Download Clients
+  # ---------------------------------------------------------------------------
+
+  qbittorrent-vpn:
+    image: binhex/arch-qbittorrentvpn:latest
+    container_name: qbittorrent-vpn
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - VPN_ENABLED=yes
+      - VPN_PROV=custom
+      - VPN_CLIENT=openvpn
+      - STRICT_PORT_FORWARD=yes
+      - ENABLE_PRIVOXY=yes
+      - LAN_NETWORK=192.168.0.0/16,172.16.0.0/12,10.0.0.0/8
+      - NAME_SERVERS=1.1.1.1,1.0.0.1
+      - WEBUI_PORT=8080
+      - VPN_INPUT_PORTS=54321
+      - VPN_OUTPUT_PORTS=54321
+      - WEBUI_USERNAME=${QBITTORRENT_WEBUI_USERNAME}
+      - WEBUI_PASSWORD=${QBITTORRENT_WEBUI_PASSWORD}
+      - WEBUI_BYPASS_AUTH=yes
+    volumes:
+      - qbittorrent_config:/config
+      - ${MEDIA_PATH}/downloads:/downloads
+      - ${MEDIA_PATH}/downloads/movies:/downloads/movies
+      - ${MEDIA_PATH}/downloads/tv:/downloads/tv
+      - ${MEDIA_PATH}/downloads/tv-sonarr:/downloads/tv-sonarr
+      - ${MEDIA_PATH}/downloads/torrents:/downloads/torrents
+      - ./.config/qbittorrent/openvpn:/config/openvpn:ro
+    ports:
+      - "8090:8080"
+      - "8118:8118"   # Privoxy port
+      - "5010:5010"   # Mousehole VPN leak detection port
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v2/app/version || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  qbittorrent-mam:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent-mam
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - WEBUI_PORT=8080
+      - WEBUI_BYPASS_AUTH=yes
+    volumes:
+      - qbittorrent_mam_config:/config
+      - ${MEDIA_PATH}/downloads:/downloads
+      - ${MEDIA_PATH}/downloads/movies:/downloads/movies
+      - ${MEDIA_PATH}/downloads/tv:/downloads/tv
+      - ${MEDIA_PATH}/downloads/tv-sonarr:/downloads/tv-sonarr
+      - ${MEDIA_PATH}/downloads/torrents:/downloads/torrents
+      - ${TORRENT_WATCH_DIR}:/watch-mam
+    ports:
+      - "8092:8080"
+      - "58234:58234"
+      - "58234:58234/udp"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v2/app/version || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Book Management (4 Readarr + 2 Calibre + 2 Calibre-Web + 1 Audiobookshelf)
+  # ---------------------------------------------------------------------------
+
+  readarr:
+    image: ghcr.io/pennydreadful/bookshelf:softcover
+    container_name: readarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - readarr_config:/config
+      - ${MEDIA_PATH}/books:/data/books
+      - ${MEDIA_PATH}/downloads:/downloads
+    ports:
+      - "8787:8787"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8787/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  readarr-audio:
+    image: ghcr.io/pennydreadful/bookshelf:softcover
+    container_name: readarr-audio
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - readarr_audio_config:/config
+      - ${MEDIA_PATH}/books:/data/books
+      - ${MEDIA_PATH}/downloads:/downloads
+    ports:
+      - "8788:8787"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8787/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  readarr2:
+    image: ghcr.io/pennydreadful/bookshelf:softcover
+    container_name: readarr2
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - readarr2_config:/config
+      - ${MEDIA_PATH}/books:/data/books
+      - ${MEDIA_PATH}/downloads:/downloads
+    ports:
+      - "8789:8787"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8787/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  readarr-audio2:
+    image: ghcr.io/pennydreadful/bookshelf:softcover
+    container_name: readarr-audio2
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - readarr_audio2_config:/config
+      - ${MEDIA_PATH}/books:/data/books
+      - ${MEDIA_PATH}/downloads:/downloads
+    ports:
+      - "8790:8787"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      prowlarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8787/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - audiobookshelf_config:/config
+      - ${MEDIA_PATH}/books:/audiobooks
+      - ${MEDIA_PATH}/books:/books
+    ports:
+      - "13378:80"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  calibre:
+    image: lscr.io/linuxserver/calibre:latest
+    container_name: calibre
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - calibre_config:/config
+      - ${MEDIA_PATH}/books/user1/calibre:/books
+      - ${MEDIA_PATH}/books/user1/calibre/autoadd:/autoadd
+      - ${MEDIA_PATH}/books/user1/ebooks:/imports:ro
+    ports:
+      - "8083:8080"   # Web interface
+      - "8084:8081"   # VNC desktop
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  calibre2:
+    image: lscr.io/linuxserver/calibre:latest
+    container_name: calibre2
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - calibre2_config:/config
+      - ${MEDIA_PATH}/books/user2/calibre:/books
+      - ${MEDIA_PATH}/books/user2/calibre/autoadd:/autoadd
+      - ${MEDIA_PATH}/books/user2/ebooks:/imports:ro
+    ports:
+      - "8085:8080"   # Web interface
+      - "8086:8081"   # VNC desktop
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  calibre_web:
+    image: lscr.io/linuxserver/calibre-web:latest
+    container_name: calibre_web
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - DOCKER_MODS=linuxserver/mods:universal-calibre
+    volumes:
+      - ${MEDIA_PATH}/books/user1/calibre:/books
+      - calibreweb_user1_config:/config
+    ports:
+      - "8087:8083"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  calibre_web2:
+    image: lscr.io/linuxserver/calibre-web:latest
+    container_name: calibre_web2
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - DOCKER_MODS=linuxserver/mods:universal-calibre
+    volumes:
+      - ${MEDIA_PATH}/books/user2/calibre:/books
+      - calibreweb_user2_config:/config
+    ports:
+      - "8088:8083"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Music
+  # ---------------------------------------------------------------------------
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    networks:
+      - plex_network
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    volumes:
+      - lidarr_config:/config
+      - ${MEDIA_PATH}/music:/music
+      - ${MEDIA_PATH}/downloads:/downloads
+      - ${MEDIA_PATH}/downloads/completed:/downloads/completed
+      - ${MEDIA_PATH}/downloads/music:/downloads/music
+      - ${MEDIA_PATH}/downloads/completed/Music:/downloads/completed/Music
+    ports:
+      - "8686:8686"
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8686/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Plex Analytics
+  # ---------------------------------------------------------------------------
+
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - HTTP_PROXY=true
+      - TAUTULLI_BASE_URL=https://stats.${DOMAIN}
+    volumes:
+      - tautulli_config:/config
+    ports:
+      - "8182:8181"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8181/status || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Archive Extraction
+  # ---------------------------------------------------------------------------
+
+  unpackerr:
+    image: golift/unpackerr:latest
+    container_name: unpackerr
+    restart: on-failure
+    networks:
+      - plex_network
+    volumes:
+      - ${MEDIA_PATH}/downloads:/downloads
+      - unpackerr_config:/config
+    environment:
+      - TZ=${TZ:-America/Toronto}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      # Radarr (movies)
+      - UN_RADARR_0_URL=http://radarr:7878
+      - UN_RADARR_0_API_KEY=${RADARR_API_KEY}
+      - UN_RADARR_0_TIMEOUT=60s
+      - UN_RADARR_0_DELETE_ORIG=true
+      # Sonarr (TV)
+      - UN_SONARR_0_URL=http://sonarr:8989
+      - UN_SONARR_0_API_KEY=${SONARR_API_KEY}
+      - UN_SONARR_0_TIMEOUT=60s
+      - UN_SONARR_0_DELETE_ORIG=true
+      # Readarr (ebooks - user 1)
+      - UN_READARR_0_URL=http://readarr:8787
+      - UN_READARR_0_API_KEY=${READARR_API_KEY}
+      - UN_READARR_0_TIMEOUT=60s
+      - UN_READARR_0_DELETE_ORIG=true
+      # Readarr-Audio (audiobooks - user 1)
+      - UN_READARR_1_URL=http://readarr-audio:8787
+      - UN_READARR_1_API_KEY=${READARR_AUDIO_API_KEY}
+      - UN_READARR_1_TIMEOUT=60s
+      - UN_READARR_1_DELETE_ORIG=true
+      # Readarr2 (ebooks - user 2)
+      - UN_READARR_2_URL=http://readarr2:8787
+      - UN_READARR_2_API_KEY=${READARR2_API_KEY}
+      - UN_READARR_2_TIMEOUT=60s
+      - UN_READARR_2_DELETE_ORIG=true
+      # Readarr-Audio2 (audiobooks - user 2)
+      - UN_READARR_3_URL=http://readarr-audio2:8787
+      - UN_READARR_3_API_KEY=${READARR_AUDIO2_API_KEY}
+      - UN_READARR_3_TIMEOUT=60s
+      - UN_READARR_3_DELETE_ORIG=true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f unpackerr || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # File Management
+  # ---------------------------------------------------------------------------
+
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    networks:
+      - plex_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    volumes:
+      - filebrowser_config:/config
+      - filebrowser_config:/database
+      - ${MEDIA_PATH}:/srv/media
+    ports:
+      - "8089:80"
+    restart: on-failure
+    command: --root /srv --database /database/filebrowser.db --config /config/settings.json
+
+  # ---------------------------------------------------------------------------
+  # YouTube Downloader
+  # ---------------------------------------------------------------------------
+
+  metube:
+    image: ghcr.io/alexta69/metube
+    container_name: metube
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    ports:
+      - "8401:8081"
+    environment:
+      - TZ=${TZ:-America/Toronto}
+      - DOWNLOAD_DIR=/downloads
+      - CUSTOM_DIRS=true
+      - OUTPUT_TEMPLATE=%(autonumber)03d - %(title)s.%(ext)s
+      - OUTPUT_TEMPLATE_PLAYLIST=%(playlist_title)s/%(autonumber)03d - %(title)s.%(ext)s
+      - YTDL_OPTIONS={"format":"bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/bestvideo[height<=1080]+bestaudio/best","merge_output_format":"mp4","embed_thumbnail":true,"add_metadata":true,"sponsorblock_remove":["sponsor","interaction"],"write_subs":true,"write_auto_subs":true,"sub_langs":"en.*,fr.*","writeinfojson":false,"writethumbnail":false}
+    volumes:
+      - ${MEDIA_PATH}/YouTube/_INBOX:/downloads
+      - ${COOKIES_PATH}:/cookies/cookies.txt:ro
+    networks:
+      - plex_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # ---------------------------------------------------------------------------
+  # OAuth2 Authentication Gateway
+  # ---------------------------------------------------------------------------
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    container_name: oauth2-proxy
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    ports:
+      - "4180:4180"
+    networks:
+      - plex_network
+    volumes:
+      - ./.config/.oauth2-emails.txt:/etc/oauth2-emails.txt:ro
+    healthcheck:
+      test: ["CMD", "/bin/oauth2-proxy", "--version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET}
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: "/etc/oauth2-emails.txt"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: "lax"
+      OAUTH2_PROXY_COOKIE_EXPIRE: 168h
+      OAUTH2_PROXY_COOKIE_REFRESH: 24h
+      OAUTH2_PROXY_COOKIE_DOMAINS: .${DOMAIN}
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_PASS_AUTHORIZATION: "true"
+      OAUTH2_PROXY_SET_AUTHORIZATION_HEADER: "true"
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .${DOMAIN}
+      OAUTH2_PROXY_REDIRECT_URL: https://auth.${DOMAIN}/oauth2/callback
+      OAUTH2_PROXY_UPSTREAMS: "file:///dev/null"
+      OAUTH2_PROXY_SESSION_STORE_TYPE: cookie
+    command:
+      - --http-address=0.0.0.0:4180
+      - --reverse-proxy=true
+      - --skip-jwt-bearer-tokens=true
+      - --standard-logging=true
+      - --request-logging=false
+      - --auth-logging=true
+
+  # ---------------------------------------------------------------------------
+  # AI Subtitle Generation (4-container stack)
+  # ---------------------------------------------------------------------------
+
+  subgeneratorr:
+    build:
+      context: ./deepgram-subtitles
+      dockerfile: cli/Dockerfile
+    container_name: subgeneratorr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - MEDIA_PATH=/media
+      - BATCH_SIZE=10
+      - LOG_PATH=/logs
+      - LANGUAGE=en
+    volumes:
+      - ${MEDIA_PATH}:/media
+      - ./deepgram-subtitles/deepgram-logs:/logs
+      - ./deepgram-subtitles:/config:ro
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - plex_network
+
+  subgeneratorr-redis:
+    image: redis:7-alpine
+    container_name: subgeneratorr-redis
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - plex_network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  subgeneratorr-web:
+    build:
+      context: ./deepgram-subtitles
+      dockerfile: web/Dockerfile
+    container_name: subgeneratorr-web
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    working_dir: /app
+    environment:
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
+      SECRET_KEY: ${SECRET_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://subgeneratorr-redis:6379/0}
+      MEDIA_ROOT: /media
+      LOG_ROOT: /logs
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-nova-3}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:-en}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      BAZARR_BASE_URL: ${BAZARR_BASE_URL:-http://bazarr:6767}
+      BAZARR_API_KEY: ${BAZARR_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      PYTHONPATH: /deepgram-subtitles:/app
+    volumes:
+      - ${MEDIA_PATH}:/media
+      - ./deepgram-subtitles/deepgram-logs:/logs
+      - ./deepgram-subtitles/web:/app
+      - ./deepgram-subtitles:/deepgram-subtitles:ro
+    depends_on:
+      subgeneratorr-redis:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5000/healthz | grep ok"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5000:5000"
+    networks:
+      - plex_network
+
+  subgeneratorr-worker:
+    build:
+      context: ./deepgram-subtitles
+      dockerfile: web/Dockerfile
+    container_name: subgeneratorr-worker
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    working_dir: /app
+    environment:
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://subgeneratorr-redis:6379/0}
+      MEDIA_ROOT: /media
+      LOG_ROOT: /logs
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-nova-3}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:-en}
+      BAZARR_BASE_URL: ${BAZARR_BASE_URL:-http://bazarr:6767}
+      BAZARR_API_KEY: ${BAZARR_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CELERYD_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      PYTHONPATH: /deepgram-subtitles:/app
+    command: celery -A tasks.celery_app worker --loglevel=INFO -Q transcribe --concurrency=${WORKER_CONCURRENCY:-1}
+    volumes:
+      - ${MEDIA_PATH}:/media
+      - ./deepgram-subtitles/deepgram-logs:/logs
+      - ./deepgram-subtitles/web:/app
+      - ./deepgram-subtitles:/deepgram-subtitles:ro
+    depends_on:
+      subgeneratorr-redis:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - plex_network
+
+  # ---------------------------------------------------------------------------
+  # Notifications & Integration
+  # ---------------------------------------------------------------------------
+
+  trailarr:
+    image: nandyalu/trailarr:latest
+    container_name: trailarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - YTDLP_FORMAT=bestvideo+bestaudio/best
+      - TMDB_API_KEY=${TMDB_API_KEY}
+    volumes:
+      - trailarr_config:/config
+      - ${MEDIA_PATH}/movies:/movies
+      - ${MEDIA_PATH}/tv:/tv
+      - ${MEDIA_PATH}:/media
+      - /usr/local/bin/yt-dlp:/usr/local/bin/yt-dlp:ro
+      - ${COOKIES_PATH}:/config/cookies.txt:ro
+    ports:
+      - "7889:7889"
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+
+  notifiarr:
+    image: golift/notifiarr:latest
+    container_name: notifiarr
+    hostname: notifiarr
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - DN_API_KEY=${NOTIFIARR_API_KEY}
+      # Sonarr
+      - DN_SONARR_0_URL=http://sonarr:8989
+      - DN_SONARR_0_API_KEY=${SONARR_API_KEY}
+      # Radarr
+      - DN_RADARR_0_URL=http://radarr:7878
+      - DN_RADARR_0_API_KEY=${RADARR_API_KEY}
+      # Readarr (ebooks - user 1)
+      - DN_READARR_0_URL=http://readarr:8787
+      - DN_READARR_0_API_KEY=${READARR_API_KEY}
+      # Readarr-Audio (audiobooks - user 1)
+      - DN_READARR_1_URL=http://readarr-audio:8787
+      - DN_READARR_1_API_KEY=${READARR_AUDIO_API_KEY}
+      # Readarr2 (ebooks - user 2)
+      - DN_READARR_2_URL=http://readarr2:8787
+      - DN_READARR_2_API_KEY=${READARR2_API_KEY}
+      # Readarr-Audio2 (audiobooks - user 2)
+      - DN_READARR_3_URL=http://readarr-audio2:8787
+      - DN_READARR_3_API_KEY=${READARR_AUDIO2_API_KEY}
+      # Bazarr
+      - DN_BAZARR_0_URL=http://bazarr:6767
+      - DN_BAZARR_0_API_KEY=${BAZARR_API_KEY}
+      # Plex
+      - DN_PLEX_URL=http://plex:32400
+      - DN_PLEX_TOKEN=${PLEX_TOKEN}
+      # Tautulli
+      - DN_TAUTULLI_0_URL=http://tautulli:8181
+      - DN_TAUTULLI_0_API_KEY=${TAUTULLI_API_KEY}
+    volumes:
+      - notifiarr_config:/config
+      - ./missing-readarr/logs:/logs/missing-readarr:ro
+    ports:
+      - "5454:5454"
+    networks:
+      - plex_network
+    restart: on-failure
+    depends_on:
+      plex:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  tautulli-digest:
+    image: foxxmd/tautulli-notification-digest:latest
+    container_name: tautulli_digest
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    ports:
+      - "8078:8080"
+    environment:
+      - TZ=${TZ:-America/Toronto}
+      - CRON=0 9 * * *   # Daily at 9 AM
+      - FORMAT=list
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    volumes:
+      - ./.config/tautulli-digest:/app/data
+    networks:
+      - plex_network
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  webhook-proxy:
+    build: ./.config/webhook-proxy
+    container_name: webhook-proxy
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    environment:
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK}
+    ports:
+      - "8079:8080"
+    networks:
+      - plex_network
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "pidof node || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  twilio-sms:
+    build: ./.config/twilio-sms
+    container_name: twilio-sms
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+    environment:
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_SMS_DISCORD_WEBHOOK=${TWILIO_SMS_DISCORD_WEBHOOK}
+    ports:
+      - "3300:3300"
+    networks:
+      - plex_network
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3300/health || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Discord Bot
+  # ---------------------------------------------------------------------------
+
+  discord-bot:
+    image: python:3.11-slim
+    container_name: discord-bot
+    restart: on-failure
+    working_dir: /app
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+      - DISCORD_TOKEN=${DISCORD_BOT_TOKEN}
+      - READARR_URL=http://readarr:8787
+      - READARR_API_KEY=${READARR_API_KEY}
+      - SONARR_URL=http://sonarr:8989
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - RADARR_URL=http://radarr:7878
+      - RADARR_API_KEY=${RADARR_API_KEY}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
+    volumes:
+      - ./discord-bot:/app
+      - ${MEDIA_PATH}/movies:/media/movies:ro
+      - ${MEDIA_PATH}/tv:/media/tv:ro
+      - ./missing-readarr/data/quarantine-notifications:/app/data/quarantine-notifications
+    networks:
+      - plex_network
+    command: /app/entrypoint.sh
+    depends_on:
+      readarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+      radarr:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f python || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # ---------------------------------------------------------------------------
+  # Web Scraping
+  # ---------------------------------------------------------------------------
+
+  firecrawl-ui:
+    image: obeoneorg/firecrawl-ui:latest
+    container_name: firecrawl-ui
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    environment:
+      - VITE_FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+      - VITE_FIRECRAWL_API_BASE_URL=https://api.firecrawl.dev/v1
+    ports:
+      - "8093:8080"
+    networks:
+      - plex_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # ---------------------------------------------------------------------------
+  # Web Terminal
+  # ---------------------------------------------------------------------------
+
+  wetty:
+    image: wettyoss/wetty:latest
+    container_name: wetty
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Toronto}
+    command: ["--base", "/", "--ssh-host", "host.docker.internal", "--ssh-port", "22", "--ssh-user", "${SSH_USER}", "--force-ssh", "--allow-iframe", "--ssh-key", "/keys/wetty-key", "--ssh-auth", "publickey"]
+    volumes:
+      - ./appdata/wetty/socket.js:/usr/src/app/build/server/socketServer/socket.js:ro
+      - ./appdata/wetty/disconnect.js:/usr/src/app/build/client/wetty/disconnect.js:ro
+      - ./appdata/wetty/clipboard.js:/usr/src/app/build/client/wetty/term/confiruragtion/clipboard.js:ro
+      - ./appdata/wetty/confiruragtion.js:/usr/src/app/build/client/wetty/term/confiruragtion.js:ro
+      - ./appdata/wetty/wetty-key:/keys/wetty-key:ro
+    ports:
+      - "3002:3000"
+    networks:
+      - plex_network
+    extra_hosts:
+      - "host.docker.internal:172.20.0.1"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # ---------------------------------------------------------------------------
+  # IRC (Private Tracker Bonus)
+  # ---------------------------------------------------------------------------
+
+  mam-irc:
+    image: irssi:alpine
+    container_name: mam-irc
+    environment:
+      - TERM=xterm
+      - TZ=${TZ:-America/Toronto}
+    volumes:
+      - ./.config/mam-irc-config:/home/user/.irssi
+    networks:
+      - plex_network
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f irssi || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # ---------------------------------------------------------------------------
+  # Agent Orchestration Dashboard
+  # ---------------------------------------------------------------------------
+
+  agent-dispatcher-web:
+    build: ${AGENT_DISPATCHER_PATH:-./../agent-dispatcher}
+    container_name: agent-dispatcher-web
+    ports:
+      - "3100:3100"
+    volumes:
+      - /tmp/agent-dispatcher.sock:/tmp/agent-dispatcher.sock
+    networks:
+      - plex_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+
+  # ---------------------------------------------------------------------------
+  # Personal Finance Dashboard
+  # ---------------------------------------------------------------------------
+
+  personal-finance:
+    build: ${PERSONAL_FINANCE_PATH:-./../personal-finance}
+    container_name: personal-finance
+    restart: unless-stopped
+    ports:
+      - "3200:3200"
+    volumes:
+      - finance-data:/data
+    environment:
+      - DB_PATH=/data/finance.db
+      - PORT=3200
+    networks:
+      - plex_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3200/ || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+
+  # ---------------------------------------------------------------------------
+  # Custom Dashboard
+  # ---------------------------------------------------------------------------
+
+  dashboard:
+    build: ${DASHBOARD_PATH:-./../dashboard}
+    container_name: dashboard
+    restart: unless-stopped
+    ports:
+      - "3400:3400"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - PORT=3400
+      - GLANCES_URL=http://glances:61208
+      - TAUTULLI_URL=http://tautulli:8181
+      - SONARR_URL=http://sonarr:8989
+      - RADARR_URL=http://radarr:7878
+      - QBIT_VPN_URL=http://qbittorrent-vpn:8080
+      - QBIT_MAM_URL=http://qbittorrent-mam:8080
+      - NZBGET_URL=http://nzbget:6789
+      - TAUTULLI_API_KEY=${TAUTULLI_API_KEY}
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - RADARR_API_KEY=${RADARR_API_KEY}
+      - PROWLARR_API_KEY=${PROWLARR_API_KEY}
+      - LIDARR_API_KEY=${LIDARR_API_KEY}
+      - BAZARR_API_KEY=${BAZARR_API_KEY}
+      - NZBGET_USER=${NZBGET_USERNAME}
+      - NZBGET_PASS=${NZBGET_PASSWORD}
+    networks:
+      - plex_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+
+# =============================================================================
+# Volumes
+# =============================================================================
+
+volumes:
+  portainer_data:
+    external: true
+  plex_config:
+  prowlarr_config:
+  sonarr_config:
+  radarr_config:
+  nzbget_config:
+  bazarr_config:
+  qbittorrent_config:
+  readarr_config:
+  readarr_audio_config:
+  readarr_audio2_config:
+  readarr2_config:
+  calibre_config:
+  calibre2_config:
+  calibreweb_user1_config:
+  calibreweb_user2_config:
+  audiobookshelf_config:
+  tautulli_config:
+  unpackerr_config:
+  filebrowser_config:
+  metube_config:
+  glances_config:
+  lidarr_config:
+  trailarr_config:
+  notifiarr_config:
+  qbittorrent_mam_config:
+  finance-data:
+
+# =============================================================================
+# Networks
+# =============================================================================
+
+networks:
+  plex_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
