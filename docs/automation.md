@@ -6,7 +6,7 @@ The infrastructure uses a layered automation approach:
 
 1. **Docker-level**: Watchtower for container updates, health checks for auto-restart
 2. **Cron-level**: 15+ scheduled scripts for maintenance, cleanup, and monitoring
-3. **Systemd-level**: 5 persistent services for real-time watchers and the agent dispatcher
+3. **Systemd-level**: 5 persistent services for real-time file watchers and scheduled converters
 4. **External tools**: Dedicated repos for backup, monitoring, and scripting
 
 ## Companion Repositories
@@ -98,12 +98,6 @@ Readarr downloads ebook --> /books/user1/ebooks/
 ### sonarr-season-limiter
 
 Monitors Pulsarr-added TV shows and limits them to Season 1 only. Prevents watchlist additions from downloading entire series backlogs.
-
-### agent-dispatcher
-
-Runs the AI agent orchestration backend (Node.js with node-pty). Spawns and manages Claude Code agents via Unix socket, which the `agent-dispatcher-web` Docker container connects to for the web UI.
-
-**Important**: After restarting the systemd service, the Docker web container must also be restarted because Docker bind-mounts the Unix socket by inode -- a restart creates a new inode.
 
 ## Health Check Architecture
 

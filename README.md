@@ -1,10 +1,10 @@
 # Self-Hosted Media & Infrastructure Stack
 
-**51 services (46 Docker + 5 systemd) | 20TB Storage | Ubuntu Server**
+**48 services (43 Docker + 5 systemd) | 20TB Storage | Ubuntu Server**
 
 ## Why This Exists
 
-I started self-hosting with Plex and a couple of *arr services. Then I needed subtitles, so I built [Subgeneratorr](https://github.com/tylerbcrawford/subgeneratorr). Then notifications needed rebranding, so I built [Boo Bot](https://github.com/tylerbcrawford/boo-bot). Then I needed backups, monitoring, book management for two users, a Discord-to-SMS bridge, and suddenly I was managing 51 services.
+I started self-hosting with Plex and a couple of *arr services. Then I needed subtitles, so I built [Subgeneratorr](https://github.com/tylerbcrawford/subgeneratorr). Then notifications needed rebranding, so I built [Boo Bot](https://github.com/tylerbcrawford/boo-bot). Then I needed backups, monitoring, book management for two users, a Discord-to-SMS bridge, and suddenly I was managing 48 services.
 
 This repo documents the full stack — not as a tutorial, but as a reference for how all the pieces fit together. If you're building something similar, the architecture decisions and automation schedules might save you some time.
 
@@ -15,13 +15,13 @@ This repo documents the full stack — not as a tutorial, but as a reference for
 | **Core Media** | Plex, Sonarr, Radarr, Prowlarr, Bazarr, Lidarr, NZBGet | 7 |
 | **Books** | 4× Readarr, 2× Calibre, 2× Calibre-Web, Audiobookshelf | 9 |
 | **Downloads** | qBittorrent-VPN, qBittorrent-MAM, Tdarr, MeTube, Unpackerr | 5 |
-| **AI** | Subgeneratorr (web + worker + Redis + CLI) | 4 |
+| **AI** | Subgeneratorr (web + worker + Redis) | 3 |
 | **Management** | Dashboard, Portainer, Tautulli, Glances, FileBrowser, WeTTY, Firecrawl UI, Watchtower | 8 |
 | **Notifications** | Notifiarr, Trailarr, Pulsarr, Discord Bot, Tautulli-Digest, Webhook-Proxy, Twilio SMS, Landing Pages | 8 |
-| **Infrastructure** | OAuth2 Proxy, Agent Dispatcher, Personal Finance | 3 |
-| **Systemd** | Calibre auto-add (×2), Sonarr season limiter, ISO converter, Agent Dispatcher runner | 5 |
+| **Infrastructure** | OAuth2 Proxy | 1 |
+| **Systemd** | Calibre auto-add (×2), Sonarr season limiter, PDF/EPUB converter, Watchlistarr health check | 5 |
 
-**Total: 51** (46 Docker + 5 systemd)
+**Total: 48** (43 Docker + 5 systemd)
 
 ## Architecture Highlights
 
@@ -53,7 +53,7 @@ Plex Watchlist → Pulsarr → Sonarr/Radarr
 
 ### Network & Auth
 
-- Single Docker bridge network connecting all 46 containers
+- Single Docker bridge network connecting all 43 containers
 - nginx reverse proxy (systemd) with wildcard SSL via certbot
 - Google OAuth2 Proxy protecting all web UIs — one login covers everything
 - Exceptions: Kobo sync (token auth), Twilio webhook (HMAC-SHA1), Plex (own auth)

@@ -2,26 +2,26 @@
 
 ## Service Topology
 
-This infrastructure runs **51 services** organized into functional categories:
+This infrastructure runs **48 services** organized into functional categories:
 
 | Category | Docker | Systemd | Total |
 |----------|--------|---------|-------|
 | Core Media (Plex, *arr suite) | 7 | 0 | 7 |
 | Book Management | 9 | 2 | 11 |
 | Download Clients | 4 | 0 | 4 |
-| AI Services | 4 | 0 | 4 |
-| Management & Monitoring | 10 | 1 | 11 |
+| AI Services | 3 | 0 | 3 |
+| Management & Monitoring | 8 | 1 | 9 |
 | Notifications & Integration | 7 | 1 | 8 |
 | Landing Pages | 2 | 0 | 2 |
 | Authentication | 1 | 0 | 1 |
 | Other (Tdarr, Watchtower, IRC) | 3 | 1 | 4 |
-| **Total** | **46** | **5** | **51** |
+| **Total** | **43** | **5** | **48** |
 
 ## Network Design
 
 ### Single Bridge Network
 
-All 46 Docker containers share a single bridge network (`plex_network`) with subnet `172.20.0.0/16`. This keeps inter-service communication simple -- any container can reach any other by hostname.
+All 43 Docker containers share a single bridge network (`plex_network`) with subnet `172.20.0.0/16`. This keeps inter-service communication simple -- any container can reach any other by hostname.
 
 ```
 Internet
@@ -39,7 +39,7 @@ Internet
 
 ### Why a single network?
 
-- **Simplicity over isolation**: With 46 containers needing to talk to each other (Sonarr to Prowlarr, Unpackerr to all *arr services, Notifiarr to everything), multi-network setups create more complexity than security benefit.
+- **Simplicity over isolation**: With 43 containers needing to talk to each other (Sonarr to Prowlarr, Unpackerr to all *arr services, Notifiarr to everything), multi-network setups create more complexity than security benefit.
 - **OAuth2 provides the security boundary**: All external access goes through nginx + OAuth2 Proxy. The Docker network is internal-only.
 - **Static gateway IP** (`172.20.0.1`): Used by WeTTY to SSH back to the host via `host.docker.internal`.
 

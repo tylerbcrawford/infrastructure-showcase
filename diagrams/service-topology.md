@@ -51,7 +51,6 @@ graph TB
         SUB_WEB[Subgeneratorr Web :5000]
         SUB_WORKER[Subgeneratorr Worker]
         SUB_REDIS[Redis :6379]
-        SUB_CLI[Subgeneratorr CLI]
     end
 
     subgraph "Management & Monitoring"
@@ -63,8 +62,6 @@ graph TB
         WETTY[WeTTY :3002]
         FIRECRAWL[Firecrawl UI :8093]
         WATCH[Watchtower<br/>4 AM daily]
-        AGENT[Agent Dispatcher :3100]
-        FINANCE[Personal Finance :3200]
     end
 
     subgraph "Notifications"
@@ -81,7 +78,6 @@ graph TB
         AUTOADD1[calibre-autoadd-watcher<br/>User 1]
         AUTOADD2[calibre-autoadd-watcher<br/>User 2]
         SEASON[sonarr-season-limiter]
-        AGENTD[agent-dispatcher<br/>systemd]
     end
 
     %% Media Acquisition Flow
@@ -147,8 +143,6 @@ graph TB
     DASH -->|reads from| RADARR
     DASH -->|reads from| NZBGET
 
-    %% Agent Dispatcher
-    AGENTD -->|Unix socket| AGENT
 
     %% Discord Bot
     DBOT -->|manages| READARR1
@@ -167,8 +161,6 @@ graph TB
     NGINX --> GLANCES
     NGINX --> FBROWSER
     NGINX --> WETTY
-    NGINX --> AGENT
-    NGINX --> FINANCE
 
     %% Styling
     classDef media fill:#4a9eff,stroke:#333,color:#fff
@@ -184,10 +176,10 @@ graph TB
     class PLEX,SONARR,RADARR,PROWLARR,BAZARR,LIDARR media
     class NZBGET,QBIT_VPN,QBIT_MAM,UNPACKERR,MAM_IRC download
     class READARR1,READARR_A1,READARR2,READARR_A2,CALIBRE1,CALIBRE2,CWEB1,CWEB2,ABS book
-    class SUB_WEB,SUB_WORKER,SUB_REDIS,SUB_CLI ai
-    class DASH,PORT,TAUT,GLANCES,FBROWSER,WETTY,FIRECRAWL,WATCH,AGENT,FINANCE mgmt
+    class SUB_WEB,SUB_WORKER,SUB_REDIS ai
+    class DASH,PORT,TAUT,GLANCES,FBROWSER,WETTY,FIRECRAWL,WATCH mgmt
     class NOTIFIARR,TRAILARR,PULSARR,DBOT,TDIGEST,WEBHOOK,TWILIO notify
-    class AUTOADD1,AUTOADD2,SEASON,AGENTD systemd
+    class AUTOADD1,AUTOADD2,SEASON systemd
     class OAUTH auth
     class NGINX proxy
 ```

@@ -1,6 +1,6 @@
 # =============================================================================
 # Self-Hosted Media & Infrastructure Stack
-# 46 Docker services | Single bridge network | OAuth2-protected
+# 43 Docker services | Single bridge network | OAuth2-protected
 # =============================================================================
 # Usage:
 #   cp .env.example .env    # Fill in your credentials
@@ -1002,33 +1002,6 @@ services:
   # AI Subtitle Generation (4-container stack)
   # ---------------------------------------------------------------------------
 
-  subgeneratorr:
-    build:
-      context: ./deepgram-subtitles
-      dockerfile: cli/Dockerfile
-    container_name: subgeneratorr
-    environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
-      - TZ=${TZ:-America/Toronto}
-      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
-      - MEDIA_PATH=/media
-      - BATCH_SIZE=10
-      - LOG_PATH=/logs
-      - LANGUAGE=en
-    volumes:
-      - ${MEDIA_PATH}:/media
-      - ./deepgram-subtitles/deepgram-logs:/logs
-      - ./deepgram-subtitles:/config:ro
-    restart: "no"
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-    networks:
-      - plex_network
-
   subgeneratorr-redis:
     image: redis:7-alpine
     container_name: subgeneratorr-redis
@@ -1443,63 +1416,6 @@ services:
   # Agent Orchestration Dashboard
   # ---------------------------------------------------------------------------
 
-  agent-dispatcher-web:
-    build: ${AGENT_DISPATCHER_PATH:-./../agent-dispatcher}
-    container_name: agent-dispatcher-web
-    ports:
-      - "3100:3100"
-    volumes:
-      - /tmp/agent-dispatcher.sock:/tmp/agent-dispatcher.sock
-    networks:
-      - plex_network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ || exit 1"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    labels:
-      - com.centurylinklabs.watchtower.enable=false
-
-  # ---------------------------------------------------------------------------
-  # Personal Finance Dashboard
-  # ---------------------------------------------------------------------------
-
-  personal-finance:
-    build: ${PERSONAL_FINANCE_PATH:-./../personal-finance}
-    container_name: personal-finance
-    restart: unless-stopped
-    ports:
-      - "3200:3200"
-    volumes:
-      - finance-data:/data
-    environment:
-      - DB_PATH=/data/finance.db
-      - PORT=3200
-    networks:
-      - plex_network
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3200/ || exit 1"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    labels:
-      - com.centurylinklabs.watchtower.enable=false
-
-  # ---------------------------------------------------------------------------
-  # Custom Dashboard
-  # ---------------------------------------------------------------------------
-
   dashboard:
     build: ${DASHBOARD_PATH:-./../dashboard}
     container_name: dashboard
@@ -1566,7 +1482,6 @@ volumes:
   trailarr_config:
   notifiarr_config:
   qbittorrent_mam_config:
-  finance-data:
 
 # =============================================================================
 # Networks
