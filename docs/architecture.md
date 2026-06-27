@@ -2,12 +2,12 @@
 
 ## Service Topology
 
-This infrastructure runs **48 services** organized into functional categories:
+This infrastructure runs **49 services** organized into functional categories:
 
 | Category | Docker | Systemd | Total |
 |----------|--------|---------|-------|
 | Core Media (Plex, *arr suite) | 7 | 0 | 7 |
-| Book Management | 9 | 2 | 11 |
+| Book Management | 9 | 3 | 12 |
 | Download Clients | 4 | 0 | 4 |
 | AI Services | 3 | 0 | 3 |
 | Management & Monitoring | 8 | 1 | 9 |
@@ -15,7 +15,7 @@ This infrastructure runs **48 services** organized into functional categories:
 | Landing Pages | 2 | 0 | 2 |
 | Authentication | 1 | 0 | 1 |
 | Other (Tdarr, Watchtower, IRC) | 3 | 1 | 4 |
-| **Total** | **43** | **5** | **48** |
+| **Total** | **43** | **6** | **49** |
 
 ## Network Design
 

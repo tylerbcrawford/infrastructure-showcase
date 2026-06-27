@@ -6,7 +6,7 @@ The infrastructure uses a layered automation approach:
 
 1. **Docker-level**: Watchtower for container updates, health checks for auto-restart
 2. **Cron-level**: 15+ scheduled scripts for maintenance, cleanup, and monitoring
-3. **Systemd-level**: 5 persistent services for real-time file watchers and scheduled converters
+3. **Systemd-level**: 6 persistent services for real-time file watchers and scheduled converters
 4. **External tools**: Dedicated repos for backup, monitoring, and scripting
 
 ## Companion Repositories
