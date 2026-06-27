@@ -6,7 +6,7 @@
 
 I started self-hosting with Plex and a couple of *arr services. Then I needed subtitles, so I built [Subgeneratorr](https://github.com/tylerbcrawford/subgeneratorr). Then notifications needed rebranding, so I built [Boo Bot](https://github.com/tylerbcrawford/boo-bot). Then I needed backups, monitoring, book management for two users, a Discord-to-SMS bridge, and suddenly I was managing 49 services.
 
-This repo documents the full stack — not as a tutorial, but as a reference for how all the pieces fit together. If you're building something similar, the architecture decisions and automation schedules might save you some time.
+This repo documents the full stack as a reference for how all the pieces fit together. If you're building something similar, the architecture decisions and automation schedules might save you some time.
 
 ## Stack at a Glance
 
@@ -64,7 +64,7 @@ Plex Watchlist → Pulsarr → Sonarr/Radarr
 
 **Why a systemd season limiter?** Pulsarr auto-adds shows from Plex watchlists, but by default it monitors all seasons. For a new show, I only want Season 1 until I know I like it. A small systemd service watches Sonarr's API and flips new additions to Season 1 only.
 
-**Why both Bazarr and Subgeneratorr?** Bazarr handles ~85% of subtitle needs from community sources. Subgeneratorr fills the gaps with AI transcription — obscure shows, older content, anything without community subs. They work in sequence, not in competition.
+**Why both Bazarr and Subgeneratorr?** Bazarr handles ~85% of subtitle needs from community sources. Subgeneratorr fills the gaps with AI transcription — obscure shows, older content, anything without community subs. They run in sequence: Bazarr first, then Subgeneratorr on what's left.
 
 **Tiered startup** — services boot in 5 waves to prevent CPU spikes. Infrastructure first, then downloads, then media managers, then Plex, then notifications. Each wave waits for health checks before starting the next.
 
