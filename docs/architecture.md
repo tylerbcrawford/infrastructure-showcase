@@ -14,7 +14,7 @@ This infrastructure runs **49 services** organized into functional categories:
 | Notifications & Integration | 7 | 1 | 8 |
 | Landing Pages | 2 | 0 | 2 |
 | Authentication | 1 | 0 | 1 |
-| Other (Tdarr, WUD, IRC) | 3 | 1 | 4 |
+| Other (Tdarr, IRC) | 2 | 1 | 3 |
 | **Total** | **43** | **6** | **49** |
 
 ## Network Design
