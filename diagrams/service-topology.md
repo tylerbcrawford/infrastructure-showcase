@@ -61,7 +61,7 @@ graph TB
         FBROWSER[FileBrowser :8089]
         WETTY[WeTTY :3002]
         FIRECRAWL[Firecrawl UI :8093]
-        WATCH[Watchtower<br/>4 AM daily]
+        WATCH[WUD<br/>Thu 8 AM digest]
     end
 
     subgraph "Notifications"

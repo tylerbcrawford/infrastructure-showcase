@@ -147,7 +147,7 @@ Every container has CPU and memory limits via `deploy.resources.limits`. No cont
 
 - **No `privileged: true`**: Glances uses targeted `cap_add: [SYS_PTRACE]` instead
 - **Read-only mounts**: Media files mounted as `:ro` where write access isn't needed
-- **Docker socket**: Only Portainer, Glances, Watchtower, and Dashboard have socket access (required for their functionality)
+- **Docker socket**: Only Portainer, Glances, WUD, and Dashboard have socket access (required for their functionality). WUD's mount is read-only (`:ro`).
 
 ### Health Checks
 

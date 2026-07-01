@@ -14,7 +14,7 @@ This infrastructure runs **49 services** organized into functional categories:
 | Notifications & Integration | 7 | 1 | 8 |
 | Landing Pages | 2 | 0 | 2 |
 | Authentication | 1 | 0 | 1 |
-| Other (Tdarr, Watchtower, IRC) | 3 | 1 | 4 |
+| Other (Tdarr, WUD, IRC) | 3 | 1 | 4 |
 | **Total** | **43** | **6** | **49** |
 
 ## Network Design
@@ -146,6 +146,6 @@ Services are constrained with CPU and memory limits via `deploy.resources.limits
 | Heavy | 4-8G | 1.5-3.0 | Plex, Tdarr |
 | Medium | 1-2G | 1.0-1.5 | Sonarr, Radarr, NZBGet, qBittorrent-VPN, Calibre x2, Trailarr, Audiobookshelf, Subgeneratorr Worker |
 | Standard | 256-512M | 0.5 | Prowlarr, Bazarr, Lidarr, Readarr x4, Calibre-Web x2, Pulsarr, qBit-MAM, All remaining |
-| Light | 64-128M | 0.1-0.25 | Landing pages, WeTTY, Webhook-proxy, Twilio-SMS, MAM-IRC, Watchtower, Glances, Firecrawl-UI |
+| Light | 64-128M | 0.1-0.25 | Landing pages, WeTTY, Webhook-proxy, Twilio-SMS, MAM-IRC, WUD, Glances, Firecrawl-UI |
 
 Total memory budget: ~30-35GB across all containers (designed for a 64GB RAM server).

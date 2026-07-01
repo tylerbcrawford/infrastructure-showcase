@@ -4,7 +4,7 @@
 
 The infrastructure uses a layered automation approach:
 
-1. **Docker-level**: Watchtower for container updates, health checks for auto-restart
+1. **Docker-level**: WUD for update monitoring, health checks for auto-restart
 2. **Cron-level**: 15+ scheduled scripts for maintenance, cleanup, and monitoring
 3. **Systemd-level**: 6 persistent services for real-time file watchers and scheduled converters
 4. **External tools**: Dedicated repos for backup, monitoring, and scripting
@@ -17,21 +17,21 @@ The infrastructure uses a layered automation approach:
 | **server-monitoring-suite** | Health monitoring, service checks, alerting | [GitHub](https://github.com/tylerbcrawford/server-monitoring-suite) |
 | **homelab-scripts** | Automation scripts for media server management | [GitHub](https://github.com/tylerbcrawford/homelab-scripts) |
 
-## Container Auto-Updates (Watchtower)
+## Update Monitoring (WUD)
 
-Watchtower runs daily at **4:00 AM** and updates containers that opt in via labels:
+This stack used Watchtower for unattended nightly updates until June 2026. It now runs [WUD (What's Up Docker)](https://github.com/getwud/wud) in monitor-only mode. Images are version-pinned, so updates are reviewed and applied by hand rather than pulled automatically at 4 AM. WUD scans weekly on **Thursday at 08:00** and posts a digest of what is available:
 
 ```yaml
-watchtower:
+wud:
   environment:
-    - WATCHTOWER_SCHEDULE=0 0 4 * * *
-    - WATCHTOWER_CLEANUP=false
-    - WATCHTOWER_ROLLING_RESTART=true
+    - WUD_WATCHER_LOCAL_CRON=0 8 * * 4
+    - WUD_WATCHER_LOCAL_WATCHBYDEFAULT=true
+    - WUD_TRIGGER_DISCORD_admin_MODE=batch
 ```
 
-- **Rolling restart**: Updates containers one at a time to minimize downtime
-- **Selective updates**: Custom-built containers (webhook-proxy, twilio-sms, subgeneratorr, etc.) are excluded via `com.centurylinklabs.watchtower.enable=false`
-- **Discord notifications**: Watchtower posts update summaries to a Discord webhook
+- **Monitor only**: WUD reports available updates but never restarts a container on its own.
+- **Selective watching**: services opt out with the `wud.watch=false` label (custom-built containers like webhook-proxy, twilio-sms, and subgeneratorr set their own tags).
+- **Discord digest**: a single batched summary of all pending updates posts to the Discord `#admin` channel each week.
 
 ## Cron Job Portfolio
 
@@ -57,7 +57,6 @@ watchtower:
 | 3:00 AM | Incremental backup | Backup configs if changes detected |
 | 3:00 AM | SSL renewal check | Certbot auto-renewal |
 | 3:05-3:20 AM | Readarr cleanup (x4) | Staggered cleanup across 4 Readarr instances |
-| 4:00 AM | Container updates | Watchtower checks for new images |
 | 9:00 AM | Plex stats digest | Daily viewing stats posted to Discord |
 
 ### Weekly
@@ -70,6 +69,7 @@ watchtower:
 | Sunday 5:00 AM | Intermediate folder cleanup | Remove empty staging directories |
 | Sunday 5:00 AM | Audiobookshelf author match | Update author metadata |
 | Monday 6:00 AM | Log health check | Audit all log directories for anomalies |
+| Thursday 8:00 AM | WUD update digest | Available-image digest posted to Discord `#admin` |
 
 ### Monthly
 

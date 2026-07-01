@@ -14,16 +14,41 @@ This repo documents the full stack as a reference for how all the pieces fit tog
 |----------|----------|-------|
 | **Core Media** | Plex, Sonarr, Radarr, Prowlarr, Bazarr, Lidarr, NZBGet | 7 |
 | **Books** | 4× Readarr, 2× Calibre, 2× Calibre-Web, Audiobookshelf | 9 |
-| **Downloads** | qBittorrent-VPN, qBittorrent-MAM, Tdarr, MeTube, Unpackerr | 5 |
+| **Downloads** | qBittorrent-VPN, qBittorrent-MAM, MAM-IRC, Tdarr, MeTube, Unpackerr | 6 |
 | **AI** | Subgeneratorr (web + worker + Redis) | 3 |
-| **Management** | Dashboard, Portainer, Tautulli, Glances, FileBrowser, WeTTY, Firecrawl UI, Watchtower | 8 |
-| **Notifications** | Notifiarr, Trailarr, Pulsarr, Discord Bot, Tautulli-Digest, Webhook-Proxy, Twilio SMS, Landing Pages | 8 |
+| **Management** | Dashboard, Portainer, Tautulli, Glances, FileBrowser, WeTTY, Firecrawl UI, WUD | 8 |
+| **Notifications** | Notifiarr, Trailarr, Pulsarr, Discord Bot, Tautulli-Digest, Webhook-Proxy, Twilio SMS, Landing Pages (×2) | 9 |
 | **Infrastructure** | OAuth2 Proxy | 1 |
 | **Systemd** | Calibre auto-add (×2), Sonarr season limiter, PDF/EPUB converter (×2), Watchlistarr health check | 6 |
 
 **Total: 49** (43 Docker + 6 systemd)
 
+## Security Posture
+
+Every web UI sits behind a single Google OAuth2 gateway, so one login covers the whole stack and there are no per-service passwords to hand out.
+
+```
+User --> nginx --> auth_request to OAuth2 Proxy
+                       |
+                       +--> Not authenticated? Redirect to Google login
+                       |
+                       +--> Authenticated? Proxy to upstream service
+```
+
+Hardening layered underneath:
+
+- **TLS everywhere** — one wildcard Let's Encrypt cert, HTTP redirected to HTTPS, HSTS with preload.
+- **UFW default-deny inbound**; only 22, 80, 443, and Plex's direct port are open. Everything else is reachable only through the nginx reverse proxy.
+- **fail2ban** jails on SSH and nginx auth failures (3–5 retries, 1-hour bans).
+- **SSH is key-only**, root login disabled, `MaxAuthTries 3`.
+- **Per-container resource limits** so no single container can starve the host, with read-only media mounts and a locked-down Docker socket.
+- **VPN kill switch** on the primary torrent client: if the tunnel drops, `STRICT_PORT_FORWARD` halts all traffic.
+
+Full details, including the email allowlist, sysctl tuning, and unattended security updates, are in [docs/security.md](docs/security.md).
+
 ## Architecture Highlights
+
+The full service graph, ports, and data flows are drawn out in the [service topology diagram](diagrams/service-topology.md).
 
 ### Media Acquisition Pipeline
 
@@ -77,8 +102,8 @@ Highlights from the cron schedule (see [docs/automation.md](docs/automation.md) 
 | Every 5 min | Dynamic DNS update |
 | Every 6 hours | Health check (all services) |
 | 3:00 AM daily | Incremental backup → Google Drive |
-| 4:00 AM daily | Watchtower container updates |
 | 9:00 AM daily | Plex stats digest to Discord |
+| Thursday 8:00 AM | WUD update-available digest to Discord |
 | Sunday 2:00 AM | Forced full backup |
 | Continuous | Calibre auto-add watchers, season limiter |
 
@@ -96,6 +121,7 @@ Highlights from the cron schedule (see [docs/automation.md](docs/automation.md) 
 
 Detailed reference docs live in `docs/`:
 - **[Architecture](docs/architecture.md)** — full service topology and data flows
+- **[Service Topology Diagram](diagrams/service-topology.md)** — Mermaid graph of every service, port, and data flow
 - **[Security](docs/security.md)** — hardening details, OAuth2 flow, credential management
 - **[Automation](docs/automation.md)** — complete cron schedule and monitoring setup
 

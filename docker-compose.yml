@@ -329,7 +329,7 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   # ---------------------------------------------------------------------------
   # Video Transcoding
@@ -368,31 +368,43 @@ services:
       start_period: 90s
 
   # ---------------------------------------------------------------------------
-  # Container Auto-Update
+  # Update Monitor (WUD — What's Up Docker)
   # ---------------------------------------------------------------------------
+  # Replaced Watchtower in June 2026: WUD is monitor-only. Images are
+  # version-pinned and updates are reviewed and applied by hand, so there are
+  # no unattended 4 AM restarts. WUD posts a weekly digest of available updates
+  # to Discord instead. Opt a service in or out with the wud.watch label.
 
-  watchtower:
-    image: containrrr/watchtower:latest
-    container_name: watchtower
+  wud:
+    image: getwud/wud:8.2.2
+    container_name: wud
     environment:
       - TZ=${TZ:-America/Toronto}
-      - WATCHTOWER_CLEANUP=false
-      - WATCHTOWER_INCLUDE_RESTARTING=true
-      - WATCHTOWER_ROLLING_RESTART=true
-      - WATCHTOWER_SCHEDULE=0 0 4 * * *  # Run daily at 4 AM
-      - WATCHTOWER_NOTIFICATIONS_LEVEL=warn
-      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_DISCORD_URL}
-      - WATCHTOWER_NOTIFICATION_TEMPLATE={{range .}}{{.Message}}{{println}}{{end}}
+      # Scan weekly, Thursday 08:00
+      - WUD_WATCHER_LOCAL_CRON=0 8 * * 4
+      - WUD_WATCHER_LOCAL_WATCHBYDEFAULT=true
+      # lscr.io (LinuxServer) redirects to ghcr.io and needs GitHub creds even for public images
+      - WUD_REGISTRY_LSCR_PUBLIC_USERNAME=${WUD_LSCR_USERNAME}
+      - WUD_REGISTRY_LSCR_PUBLIC_TOKEN=${WUD_LSCR_TOKEN}
+      # Weekly digest of all pending updates to Discord
+      - WUD_TRIGGER_DISCORD_admin_URL=${WUD_DISCORD_ADMIN_URL}
+      - WUD_TRIGGER_DISCORD_admin_MODE=batch
+      - WUD_TRIGGER_DISCORD_admin_ONCE=false
+      - WUD_TRIGGER_DISCORD_admin_THRESHOLD=all
+      - WUD_TRIGGER_DISCORD_admin_SIMPLEBODY=$${container.name} -> $${container.updateKind.remoteValue}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - wud_store:/store
     networks:
       - plex_network
-    restart: on-failure
+    restart: unless-stopped
+    labels:
+      - "wud.watch=true"
     deploy:
       resources:
         limits:
           cpus: '0.25'
-          memory: 128M
+          memory: 256M
 
   # ---------------------------------------------------------------------------
   # Download Clients
@@ -767,7 +779,7 @@ services:
       - PGID=${PGID:-1000}
       - TZ=${TZ:-America/Toronto}
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
     volumes:
       - lidarr_config:/config
       - ${MEDIA_PATH}/music:/music
@@ -897,7 +909,7 @@ services:
       - PGID=${PGID:-1000}
       - TZ=${TZ:-America/Toronto}
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
     volumes:
       - filebrowser_config:/config
       - filebrowser_config:/database
@@ -941,7 +953,7 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   # ---------------------------------------------------------------------------
   # OAuth2 Authentication Gateway
@@ -1025,7 +1037,7 @@ services:
       dockerfile: web/Dockerfile
     container_name: subgeneratorr-web
     labels:
-      - com.centurylinklabs.watchtower.enable=false
+      - wud.watch=false
     working_dir: /app
     environment:
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
@@ -1072,7 +1084,7 @@ services:
       dockerfile: web/Dockerfile
     container_name: subgeneratorr-worker
     labels:
-      - com.centurylinklabs.watchtower.enable=false
+      - wud.watch=false
     working_dir: /app
     environment:
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
@@ -1189,7 +1201,7 @@ services:
         limits:
           memory: 256M
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   tautulli-digest:
     image: foxxmd/tautulli-notification-digest:latest
@@ -1212,13 +1224,13 @@ services:
     networks:
       - plex_network
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   webhook-proxy:
     build: ./.config/webhook-proxy
     container_name: webhook-proxy
     labels:
-      - com.centurylinklabs.watchtower.enable=false
+      - wud.watch=false
     deploy:
       resources:
         limits:
@@ -1242,7 +1254,7 @@ services:
     build: ./.config/twilio-sms
     container_name: twilio-sms
     labels:
-      - com.centurylinklabs.watchtower.enable=false
+      - wud.watch=false
     deploy:
       resources:
         limits:
@@ -1311,7 +1323,7 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   # ---------------------------------------------------------------------------
   # Web Scraping
@@ -1340,7 +1352,7 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   # ---------------------------------------------------------------------------
   # Web Terminal
@@ -1379,7 +1391,7 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   # ---------------------------------------------------------------------------
   # IRC (Private Tracker Bonus)
@@ -1410,7 +1422,7 @@ services:
       retries: 3
       start_period: 10s
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - wud.watch=true
 
   # ---------------------------------------------------------------------------
   # Agent Orchestration Dashboard
@@ -1448,7 +1460,7 @@ services:
         limits:
           memory: 256M
     labels:
-      - com.centurylinklabs.watchtower.enable=false
+      - wud.watch=false
 
 # =============================================================================
 # Volumes
@@ -1482,6 +1494,7 @@ volumes:
   trailarr_config:
   notifiarr_config:
   qbittorrent_mam_config:
+  wud_store:
 
 # =============================================================================
 # Networks
