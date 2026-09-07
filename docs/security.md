@@ -79,14 +79,21 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; prelo
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 
-# Allowed ports
-sudo ufw allow 22/tcp    # SSH
+# Public
 sudo ufw allow 80/tcp    # HTTP (redirects to HTTPS)
 sudo ufw allow 443/tcp   # HTTPS
 sudo ufw allow 32400/tcp # Plex (direct connections)
+
+# Tailnet only (interface-scoped — never reachable from the WAN)
+sudo ufw allow in on tailscale0 to any port 3389 proto tcp   # RDP
+sudo ufw allow in on tailscale0 to any port 11235 proto tcp  # Crawl4AI for the VPS
+
+# SSH: no public rule. Docker networks (for the WeTTY web terminal) and one peer IP only.
+sudo ufw allow from 172.20.0.0/16 to any port 22
+sudo ufw allow from <vps-ip> to any port 22
 ```
 
-All other ports (8989, 7878, 6789, etc.) are only accessible through the nginx reverse proxy on port 443.
+There is deliberately **no `allow 22` from anywhere**. Fleet SSH arrives over Tailscale: `tailscaled` installs its own `ts-input` netfilter chain ahead of UFW that accepts traffic on `tailscale0` and drops packets claiming a `100.64.0.0/10` source on any other interface. All other service ports (8989, 7878, 6789, …) are only reachable through the nginx reverse proxy on 443, or bound to the Tailscale address. See [networking.md](networking.md) for the full picture.
 
 ## fail2ban
 
@@ -123,6 +130,7 @@ bantime = 3600
 | PermitRootLogin | no |
 | X11Forwarding | no |
 | MaxAuthTries | 3 |
+| Reachability | Tailnet + Docker networks + one peer IP; not exposed to the internet |
 
 ## VPN for Download Clients
 

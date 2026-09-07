@@ -17,21 +17,23 @@ The infrastructure uses a layered automation approach:
 | **server-monitoring-suite** | Health monitoring, service checks, alerting | [GitHub](https://github.com/tylerbcrawford/server-monitoring-suite) |
 | **homelab-scripts** | Automation scripts for media server management | [GitHub](https://github.com/tylerbcrawford/homelab-scripts) |
 
-## Update Monitoring (WUD)
+## Image Updates (WUD + tiered auto-updater)
 
-This stack used Watchtower for unattended nightly updates until June 2026. It now runs [WUD (What's Up Docker)](https://github.com/getwud/wud) in monitor-only mode. Images are version-pinned, so updates are reviewed and applied by hand rather than pulled automatically at 4 AM. WUD scans weekly on **Thursday at 08:00** and posts a digest of what is available:
+This stack used Watchtower for unattended nightly updates until June 2026. It now runs [WUD (What's Up Docker)](https://github.com/getwud/wud) as a **scanner only** (Thursday 08:00), feeding a small auto-updater that runs 30 minutes later:
 
 ```yaml
 wud:
   environment:
     - WUD_WATCHER_LOCAL_CRON=0 8 * * 4
     - WUD_WATCHER_LOCAL_WATCHBYDEFAULT=true
-    - WUD_TRIGGER_DISCORD_admin_MODE=batch
+  ports:
+    - "127.0.0.1:3555:3000"   # API is host-local only
 ```
 
-- **Monitor only**: WUD reports available updates but never restarts a container on its own.
-- **Selective watching**: services opt out with the `wud.watch=false` label (custom-built containers like webhook-proxy, twilio-sms, and subgeneratorr set their own tags).
-- **Discord digest**: a single batched summary of all pending updates posts to the Discord `#admin` channel each week.
+- **Tiered policy**: rebuild-suffix, patch, and digest-only updates apply automatically; **minor and major** bumps post an approval embed to Discord `#admin` and wait for a ✅/❌ reaction.
+- **Health gate + auto-revert**: after each applied update the container must pass its health check, or the compose pin is rolled back and the failure is remembered so it isn't retried blindly.
+- **Pre-update snapshot**: approved updates take a restic snapshot of the affected config volumes first; `!rollback <service>` restores it.
+- **Selective watching**: services opt out with the `wud.watch=false` label.
 
 ## Cron Job Portfolio
 
@@ -47,6 +49,8 @@ wud:
 |-----|---------|
 | Nested archive extraction | Extract ZIP/RAR files downloaded by Readarr |
 | EPUB sync from GDrive | Pull converted EPUBs from Google Drive |
+| Tailscale self-check (daily 08:00) | Daemon state + node-key expiry → Discord ([watchdog](https://github.com/tylerbcrawford/tailscale-fleet-watchdog)) |
+| Tailscale fleet audit (Sun 08:30) | REST-API view of every always-on node: offline, expiry drift |
 
 ### Daily (Overnight)
 
