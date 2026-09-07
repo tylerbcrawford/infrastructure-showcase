@@ -2,26 +2,26 @@
 
 ## Service Topology
 
-This infrastructure runs **49 services** organized into functional categories:
+This infrastructure runs **57 services** organized into functional categories:
 
 | Category | Docker | Systemd | Total |
 |----------|--------|---------|-------|
 | Core Media (Plex, *arr suite) | 7 | 0 | 7 |
-| Book Management | 9 | 3 | 12 |
+| Book Management | 12 | 3 | 15 |
 | Download Clients | 4 | 0 | 4 |
-| AI Services | 3 | 0 | 3 |
+| AI & Search | 6 | 0 | 6 |
 | Management & Monitoring | 8 | 1 | 9 |
-| Notifications & Integration | 7 | 1 | 8 |
+| Notifications & Integration | 8 | 1 | 9 |
 | Landing Pages | 2 | 0 | 2 |
-| Authentication | 1 | 0 | 1 |
+| Infrastructure (auth, egress) | 2 | 0 | 2 |
 | Other (Tdarr, IRC) | 2 | 1 | 3 |
-| **Total** | **43** | **6** | **49** |
+| **Total** | **51** | **6** | **57** |
 
 ## Network Design
 
 ### Single Bridge Network
 
-All 43 Docker containers share a single bridge network (`plex_network`) with subnet `172.20.0.0/16`. This keeps inter-service communication simple -- any container can reach any other by hostname.
+All 51 Docker containers share a single bridge network (`plex_network`) with subnet `172.20.0.0/16`. This keeps inter-service communication simple -- any container can reach any other by hostname.
 
 ```
 Internet
@@ -39,7 +39,7 @@ Internet
 
 ### Why a single network?
 
-- **Simplicity over isolation**: With 43 containers needing to talk to each other (Sonarr to Prowlarr, Unpackerr to all *arr services, Notifiarr to everything), multi-network setups create more complexity than security benefit.
+- **Simplicity over isolation**: With 51 containers needing to talk to each other (Sonarr to Prowlarr, Unpackerr to all *arr services, Notifiarr to everything), multi-network setups create more complexity than security benefit.
 - **OAuth2 provides the security boundary**: All external access goes through nginx + OAuth2 Proxy. The Docker network is internal-only.
 - **Static gateway IP** (`172.20.0.1`): Used by WeTTY to SSH back to the host via `host.docker.internal`.
 
@@ -146,6 +146,6 @@ Services are constrained with CPU and memory limits via `deploy.resources.limits
 | Heavy | 4-8G | 1.5-3.0 | Plex, Tdarr |
 | Medium | 1-2G | 1.0-1.5 | Sonarr, Radarr, NZBGet, qBittorrent-VPN, Calibre x2, Trailarr, Audiobookshelf, Subgeneratorr Worker |
 | Standard | 256-512M | 0.5 | Prowlarr, Bazarr, Lidarr, Readarr x4, Calibre-Web x2, Pulsarr, qBit-MAM, All remaining |
-| Light | 64-128M | 0.1-0.25 | Landing pages, WeTTY, Webhook-proxy, Twilio-SMS, MAM-IRC, WUD, Glances, Firecrawl-UI |
+| Light | 64-128M | 0.1-0.25 | Landing pages, WeTTY, Webhook-proxy, Twilio-SMS, MAM-IRC, WUD, Glances, Crawl4AI |
 
 Total memory budget: ~30-35GB across all containers (designed for a 64GB RAM server).

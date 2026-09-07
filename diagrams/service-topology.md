@@ -60,7 +60,7 @@ graph TB
         GLANCES[Glances :8383]
         FBROWSER[FileBrowser :8089]
         WETTY[WeTTY :3002]
-        FIRECRAWL[Firecrawl UI :8093]
+        FIRECRAWL[Crawl4AI :11235]
         WATCH[WUD<br/>Thu 8 AM digest]
     end
 
