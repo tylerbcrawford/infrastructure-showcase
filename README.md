@@ -1,4 +1,4 @@
-# Self-Hosted Media & Infrastructure Stack
+# My Homelab: 57 Services, One Tailnet
 
 **57 services (51 Docker + 6 systemd) | 20TB Storage | Ubuntu Server | 6-node Tailscale fleet**
 
@@ -6,7 +6,7 @@
 
 I started self-hosting with Plex and a couple of *arr services. Then I needed subtitles, so I built [Subgeneratorr](https://github.com/tylerbcrawford/subgeneratorr). Then notifications needed rebranding, so I built [Boo Bot](https://github.com/tylerbcrawford/boo-bot). Then I needed backups, monitoring, book management for two users, a Discord-to-SMS bridge, and suddenly I was managing 57 services across a home server, a VPS, and a tailnet that ties them together.
 
-This repo documents the full stack as a reference for how all the pieces fit together. If you're building something similar, the architecture decisions and automation schedules might save you some time.
+This is my homelab: a home server, a VPS, and a tailnet that ties them together, built one itch at a time. This repo documents the full stack as a reference for how all the pieces fit together. If you're building something similar, the architecture decisions and automation schedules might save you some time.
 
 ## Stack at a Glance
 
