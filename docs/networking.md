@@ -84,7 +84,7 @@ Used for services that only behave for a residential IP. The proxy is bound to t
 | Item | Setting | Why |
 |---|---|---|
 | MagicDNS | on | Short names everywhere; no `/etc/hosts` maintenance |
-| Key expiry | **disabled** on the three always-on nodes; default 90-day on laptops and phone | Servers must not silently fall off the network; portable devices should re-auth periodically |
+| Key expiry | **disabled** on the three always-on nodes; default 180-day on laptops and phone | Servers must not silently fall off the network; portable devices should re-auth periodically |
 | Exit nodes / subnet routers | not used (yet) | Nothing on the LAN needs exposing beyond the server itself; a subnet router would be the next step if it did |
 | ACLs | default (all nodes see all nodes) | Single-user tailnet; the interesting boundary is which *ports* bind to the tailnet address, handled per service |
 | Monitoring | [tailscale-fleet-watchdog](https://github.com/tylerbcrawford/tailscale-fleet-watchdog) | Daily per-node self-check, weekly REST-API fleet audit, Discord alerts on transitions only |

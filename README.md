@@ -94,7 +94,7 @@ The home server is one node of a six-node [Tailscale](https://tailscale.com) tai
 | **Private services** | Crawl4AI (`:11235`), the SOCKS5 egress (`:1080`), and RDP (`:3389`) are bound to the `100.x` Tailscale address or allowed only `on tailscale0`. The VPS reaches them by tailnet IP; the internet can't see them. |
 | **Cross-machine sharing** | The VPS runs no scraper of its own: its agents call this server's Crawl4AI over the tailnet. The grocery pipeline routes through this server's residential IP via the tailnet SOCKS proxy. |
 | **Split access model** | Public: `https://service.domain` → nginx → OAuth2 → upstream. Private: `http://100.x.y.z:port` over Tailscale, no OAuth needed because the tunnel *is* the auth. |
-| **Key expiry** | Always-on nodes have key expiry disabled; laptops and the phone keep the 90-day default. A [fleet watchdog](https://github.com/tylerbcrawford/tailscale-fleet-watchdog) alerts on daemon logout, imminent expiry, expiry-config drift, and offline always-on nodes — built after a silent key expiry took the server off the tailnet. |
+| **Key expiry** | Always-on nodes have key expiry disabled; laptops and the phone keep the 180-day default. A [fleet watchdog](https://github.com/tylerbcrawford/tailscale-fleet-watchdog) alerts on daemon logout, imminent expiry, expiry-config drift, and offline always-on nodes — built after a silent key expiry took the server off the tailnet. |
 
 Full DNS, addressing, firewall and routing detail: [docs/networking.md](docs/networking.md).
 
