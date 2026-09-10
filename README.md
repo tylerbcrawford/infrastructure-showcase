@@ -2,6 +2,8 @@
 
 **57 services (51 Docker + 6 systemd) | 20TB Storage | Ubuntu Server | 6-node Tailscale fleet**
 
+> **Built with Claude Code.** The architecture, the decisions, and the running system are mine. The documentation in this repo was drafted with Claude Code from the live configs and reviewed by me.
+
 ## Why This Exists
 
 I started self-hosting with Plex and a couple of *arr services. Then I needed subtitles, so I built [Subgeneratorr](https://github.com/tylerbcrawford/subgeneratorr). Then notifications needed rebranding, so I built [Boo Bot](https://github.com/tylerbcrawford/boo-bot). Then I needed backups, monitoring, book management for two users, a Discord-to-SMS bridge, and suddenly I was managing 57 services across a home server, a VPS, and a tailnet that ties them together.
